@@ -1,0 +1,127 @@
+blueprint:
+  name: Knobby knob knob
+  description: Control the volume of the media player and set play/pause on it 
+  domain: automation
+  source_url: https://gist.github.com/HugoGresse/552c494b33b2b35c4c5903f7ef28cd42
+  input:
+    remote:
+      name: Remote
+      description: Moes Tuya Smart Knob Device to use
+      selector:
+        device:
+          integration: zha
+          model: TS004F
+    linked_entity_id:
+      name: Linked Entity (Optional)
+      description: Optionally link an entity to use it's custom attributes defined in customize.yaml.
+      default: ""
+      selector:
+        entity: {}
+    tv:
+      name: Tv(s)
+      description: The tv/mediaplayer(s) to control
+      selector:
+        target:
+          entity:
+            domain: media_player
+    single_press:
+      name: Single press
+      description: Action to run on single press
+      default: []
+      selector:
+        action: {}
+mode: restart
+max_exceeded: silent
+trigger:
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input 'remote'
+action:
+- variables:
+    command: '{{ trigger.event.data.command }}'
+    cluster_id: '{{ trigger.event.data.cluster_id }}'
+    endpoint_id: '{{ trigger.event.data.endpoint_id }}'
+    args: '{{ trigger.event.data.args }}'
+    linked_entity: !input 'linked_entity_id'
+    step_type: >-
+      {%- if (trigger.event.data.args|list)|length >= 2 -%}
+        {%- set args = trigger.event.data.args|list -%}
+        {%- if args|first == 0 -%}
+          {{ 'up' }}
+        {%- elif args|first == 1 -%}
+          {{ 'down' }}
+        {%- else -%}
+          {{ '' }}
+        {%- endif -%}
+      {%- else -%}
+          {{ '' }}
+      {%- endif -%}
+    step_size: >-
+      {%- if (trigger.event.data.args|list)|length >= 2 -%}
+        {%- set args = trigger.event.data.args|list -%}
+        {{ args[1]|int }}
+      {%- else -%}
+        {{ 25 }}
+      {%- endif -%}
+    volume_step: >-
+      {{ (step_size|int / 255.0 * 0.1)|round(2) }}
+    press_rotate_direction: >-
+      {%- if command == "step_color_temp" and cluster_id == 768 -%}
+        {%- set args = trigger.event.data.args|list -%}
+        {%- if args|length >= 1 -%}
+          {%- if args|first == 3 -%}
+            {{ 'up' }}
+          {%- elif args|first == 1 -%}
+            {{ 'down' }}
+          {%- else -%}
+            {{ '' }}
+          {%- endif -%}
+        {%- else -%}
+          {{ '' }}
+        {%- endif -%}
+      {%- else -%}
+        {{ '' }}
+      {%- endif -%}
+- choose:
+  - conditions:
+    - '{{ command == "toggle" }}'
+    - '{{ cluster_id == 6 }}'
+    - '{{ endpoint_id == 1 }}'
+    sequence: !input 'single_press'
+  - conditions:
+    - '{{ command == "step_color_temp" }}'
+    - '{{ cluster_id == 768 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ press_rotate_direction == "up" }}'
+    sequence:
+    - service: media_player.media_seek
+      target: !input 'tv'
+      data:
+        seek_position: "{{ (state_attr((expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|map(attribute='entity_id')|first), 'media_position')|int + 10) if (expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|list|length > 0 and state_attr((expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|map(attribute='entity_id')|first), 'media_position') is not none) else 10 }}"
+  - conditions:
+    - '{{ command == "step_color_temp" }}'
+    - '{{ cluster_id == 768 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ press_rotate_direction == "down" }}'
+    sequence:
+    - service: media_player.media_seek
+      target: !input 'tv'
+      data:
+        seek_position: "{{ [(state_attr((expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|map(attribute='entity_id')|first), 'media_position')|int - 10), 0]|max if (expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|list|length > 0 and state_attr((expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|map(attribute='entity_id')|first), 'media_position') is not none) else 0 }}"
+  - conditions:
+    - '{{ command == "step" }}'
+    - '{{ cluster_id == 8 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ step_type == "up" }}'
+    sequence:
+    - service: media_player.volume_up
+      target: !input 'tv'
+  - conditions:
+    - '{{ command == "step" }}'
+    - '{{ cluster_id == 8 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ step_type == "down" }}'
+    sequence:
+    - service: media_player.volume_down
+      target: !input 'tv'
