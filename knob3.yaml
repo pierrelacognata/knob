@@ -45,58 +45,46 @@ action:
     args: '{{ trigger.event.data.args }}'
     linked_entity: !input 'linked_entity_id'
     step_type: >-
-      {% if (trigger.event.data.args|list)|length == 3 %}
-        {% set args = trigger.event.data.args|list %}
-        {% if args|first == 0 %}
-          up
-        {% elif args|first == 1 %}
-          down
-        {% else %}
-          ''
-        {% endif %}
-      {% else %}
-        ''
-      {% endif %}
-    amount: >-
-      {% if (trigger.event.data.args|list)|length == 3 %}
-        {% set args = trigger.event.data.args|list %}
+      {%- if (trigger.event.data.args|list)|length >= 2 -%}
+        {%- set args = trigger.event.data.args|list -%}
+        {%- if args|first == 0 -%}
+          {{ 'up' }}
+        {%- elif args|first == 1 -%}
+          {{ 'down' }}
+        {%- else -%}
+          {{ '' }}
+        {%- endif -%}
+      {%- else -%}
+          {{ '' }}
+      {%- endif -%}
+    step_size: >-
+      {%- if (trigger.event.data.args|list)|length >= 2 -%}
+        {%- set args = trigger.event.data.args|list -%}
         {{ args[1]|int }}
-      {% else %}
-        0
-      {% endif %}
+      {%- else -%}
+        {{ 25 }}
+      {%- endif -%}
+    volume_step: >-
+      {{ (step_size|int / 255.0 * 0.1)|round(2) }}
 - choose:
   - conditions:
     - '{{ command == "toggle" }}'
     - '{{ cluster_id == 6 }}'
     - '{{ endpoint_id == 1 }}'
     sequence: !input 'single_press'
-
   - conditions:
     - '{{ command == "step" }}'
     - '{{ cluster_id == 8 }}'
     - '{{ endpoint_id == 1 }}'
     - '{{ step_type == "up" }}'
     sequence:
-      - service: media_player.volume_set
-        target: !input 'tv'
-        data:
-          volume_level: >
-            {{ [
-              (state_attr(states[!input 'tv'], 'volume_level') | float) + (amount / 100),
-              1
-            ] | min }}
-
+    - service: media_player.volume_up
+      target: !input 'tv'
   - conditions:
     - '{{ command == "step" }}'
     - '{{ cluster_id == 8 }}'
     - '{{ endpoint_id == 1 }}'
     - '{{ step_type == "down" }}'
     sequence:
-      - service: media_player.volume_set
-        target: !input 'tv'
-        data:
-          volume_level: >
-            {{ [
-              (state_attr(states[!input 'tv'], 'volume_level') | float) - (amount / 100),
-              0
-            ] | max }}
+    - service: media_player.volume_down
+      target: !input 'tv'
