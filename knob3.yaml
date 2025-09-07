@@ -2,6 +2,7 @@ blueprint:
   name: Knobby knob knob
   description: Control the volume of the media player and set play/pause on it 
   domain: automation
+  source_url: https://gist.github.com/HugoGresse/552c494b33b2b35c4c5903f7ef28cd42
   input:
     remote:
       name: Remote
@@ -78,12 +79,12 @@ action:
     sequence:
       - service: media_player.volume_set
         target: !input 'tv'
-        data_template:
+        data:
           volume_level: >
             {{ [
-              (state_attr(target.entity_id,'volume_level')|float) + (amount|int / 100),
+              (state_attr(states[!input 'tv'], 'volume_level') | float) + (amount / 100),
               1
-            ]|min }}
+            ] | min }}
 
   - conditions:
     - '{{ command == "step" }}'
@@ -93,9 +94,9 @@ action:
     sequence:
       - service: media_player.volume_set
         target: !input 'tv'
-        data_template:
+        data:
           volume_level: >
             {{ [
-              (state_attr(target.entity_id,'volume_level')|float) - (amount|int / 100),
+              (state_attr(states[!input 'tv'], 'volume_level') | float) - (amount / 100),
               0
-            ]|max }}
+            ] | max }}
