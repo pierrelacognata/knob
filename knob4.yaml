@@ -24,6 +24,13 @@ blueprint:
         target:
           entity:
             domain: media_player
+    remote_entity:
+      name: Android TV Remote Entity (Optional)
+      description: The Android TV remote entity for sending DPAD commands for seeking in Jellyfin/VLC (leave empty if not using Android TV)
+      default: ""
+      selector:
+        entity:
+          domain: remote
     single_press:
       name: Single press
       description: Action to run on single press
@@ -44,6 +51,7 @@ action:
     endpoint_id: '{{ trigger.event.data.endpoint_id }}'
     args: '{{ trigger.event.data.args }}'
     linked_entity: !input 'linked_entity_id'
+    remote_entity: !input 'remote_entity'
     step_type: >-
       {%- if (trigger.event.data.args|list)|length >= 2 -%}
         {%- set args = trigger.event.data.args|list -%}
@@ -94,21 +102,25 @@ action:
     - '{{ cluster_id == 768 }}'
     - '{{ endpoint_id == 1 }}'
     - '{{ press_rotate_direction == "up" }}'
+    - '{{ remote_entity != "" }}'
     sequence:
-    - service: media_player.media_seek
-      target: !input 'tv'
+    - service: remote.send_command
+      target:
+        entity_id: !input 'remote_entity'
       data:
-        seek_position: "{{ (state_attr((expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|map(attribute='entity_id')|first), 'media_position')|int + 10) if (expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|list|length > 0 and state_attr((expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|map(attribute='entity_id')|first), 'media_position') is not none) else 10 }}"
+        command: DPAD_RIGHT
   - conditions:
     - '{{ command == "step_color_temp" }}'
     - '{{ cluster_id == 768 }}'
     - '{{ endpoint_id == 1 }}'
     - '{{ press_rotate_direction == "down" }}'
+    - '{{ remote_entity != "" }}'
     sequence:
-    - service: media_player.media_seek
-      target: !input 'tv'
+    - service: remote.send_command
+      target:
+        entity_id: !input 'remote_entity'
       data:
-        seek_position: "{{ [(state_attr((expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|map(attribute='entity_id')|first), 'media_position')|int - 10), 0]|max if (expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|list|length > 0 and state_attr((expand(area_entities(area_id(device_id(trigger.event.data.device_id))))|selectattr('domain','eq','media_player')|map(attribute='entity_id')|first), 'media_position') is not none) else 0 }}"
+        command: DPAD_LEFT
   - conditions:
     - '{{ command == "step" }}'
     - '{{ cluster_id == 8 }}'
