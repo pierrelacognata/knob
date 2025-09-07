@@ -108,7 +108,7 @@ action:
       target:
         entity_id: !input 'remote_entity'
       data:
-        command: DPAD_RIGHT
+        command: RIGHT
   - conditions:
     - '{{ command == "step_color_temp" }}'
     - '{{ cluster_id == 768 }}'
@@ -120,7 +120,7 @@ action:
       target:
         entity_id: !input 'remote_entity'
       data:
-        command: DPAD_LEFT
+        command: LEFT
   - conditions:
     - '{{ command == "step" }}'
     - '{{ cluster_id == 8 }}'
