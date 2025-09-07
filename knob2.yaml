@@ -1,0 +1,108 @@
+blueprint:
+  name: Knobby knob knob
+  description: Control the volume of the media player and set play/pause on it
+  domain: automation
+  source_url: https://gist.github.com/HugoGresse/552c494b33b2b35c4c5903f7ef28cd42
+  input:
+    remote:
+      name: Remote
+      description: Moes Tuya Smart Knob Device to use
+      selector:
+        device:
+          integration: zha
+          model: TS004F
+    linked_entity_id:
+      name: Linked Entity (Optional)
+      description: Optionally link an entity to use its custom attributes defined in customize.yaml.
+      default: ""
+      selector:
+        entity: {}
+    tv:
+      name: Tv(s)
+      description: The tv/mediaplayer(s) to control
+      selector:
+        target:
+          entity:
+            domain: media_player
+    single_press:
+      name: Single press
+      description: Action to run on single press
+      default: []
+      selector:
+        action: {}
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input 'remote'
+
+action:
+  - variables:
+      command: '{{ trigger.event.data.command }}'
+      cluster_id: '{{ trigger.event.data.cluster_id }}'
+      endpoint_id: '{{ trigger.event.data.endpoint_id }}'
+      args: '{{ trigger.event.data.args }}'
+      linked_entity: !input 'linked_entity_id'
+      step_type: >-
+        {%- if (trigger.event.data.args|list)|length == 3 -%}
+          {%- set args = trigger.event.data.args|list -%}
+          {%- if args|first == 0 -%}
+            {{ 'up' }}
+          {%- elif args|first == 1 -%}
+            {{ 'down' }}
+          {%- else -%}
+            {{ '' }}
+          {%- endif -%}
+        {%- else -%}
+          {{ '' }}
+        {%- endif -%}
+      amount: >-
+        {%- if (trigger.event.data.args|list)|length == 3 -%}
+          {%- set args = trigger.event.data.args|list -%}
+          {{ args[1]|int }}
+        {%- else -%}
+          {{ 0 }}
+        {%- endif -%}
+
+  - choose:
+      # Single press (play/pause)
+      - conditions:
+          - '{{ command == "toggle" }}'
+          - '{{ cluster_id == 6 }}'
+          - '{{ endpoint_id == 1 }}'
+        sequence: !input 'single_press'
+
+      # Rotate up (volume up)
+      - conditions:
+          - '{{ command == "step" }}'
+          - '{{ cluster_id == 8 }}'
+          - '{{ endpoint_id == 1 }}'
+          - '{{ step_type == "up" }}'
+        sequence:
+          - service: media_player.volume_set
+            target: !input 'tv'
+            data:
+              volume_level: >
+                {{ [
+                  (state_attr(this.entity_id, 'volume_level')|float) + (amount|int / 100),
+                  1
+                ] | min }}
+
+      # Rotate down (volume down)
+      - conditions:
+          - '{{ command == "step" }}'
+          - '{{ cluster_id == 8 }}'
+          - '{{ endpoint_id == 1 }}'
+          - '{{ step_type == "down" }}'
+        sequence:
+          - service: media_player.volume_set
+            target: !input 'tv'
+            data:
+              volume_level: >
+                {{ [
+                  (state_attr(this.entity_id, 'volume_level')|float) - (amount|int / 100),
+                  0
+                ] | max }}
