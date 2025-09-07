@@ -1,5 +1,5 @@
 blueprint:
-  name: Knobby knob knob 3
+  name: Knobby knob knob
   description: Control the volume of the media player and set play/pause on it
   domain: automation
   input:
@@ -40,6 +40,10 @@ action:
       args: '{{ trigger.event.data.args }}'
       step_mode: '{{ args[0]|int }}'
       step_size: '{{ args[1]|int }}'
+      # extract entity IDs from the tv input once:
+      tv_entities: >
+        {{ expand((inputs.tv).entity_id)|map(attribute='entity_id')|list }}
+
   - choose:
       # Play / Pause
       - conditions:
@@ -56,10 +60,10 @@ action:
           - '{{ step_mode == 0 }}'
         sequence:
           - repeat:
-              for_each: '{{ expand(!input "tv").entity_id }}'
+              for_each: '{{ tv_entities }}'
               sequence:
                 - variables:
-                    current: '{{ state_attr(repeat.item, "volume_level") | float(0) }}'
+                    current: '{{ state_attr(repeat.item, "volume_level")|float(0) }}'
                     newvol: '{{ [ current + (step_size|int/100), 1 ] | min }}'
                 - service: media_player.volume_set
                   target:
@@ -75,10 +79,10 @@ action:
           - '{{ step_mode == 1 }}'
         sequence:
           - repeat:
-              for_each: '{{ expand(!input "tv").entity_id }}'
+              for_each: '{{ tv_entities }}'
               sequence:
                 - variables:
-                    current: '{{ state_attr(repeat.item, "volume_level") | float(0) }}'
+                    current: '{{ state_attr(repeat.item, "volume_level")|float(0) }}'
                     newvol: '{{ [ current - (step_size|int/100), 0 ] | max }}'
                 - service: media_player.volume_set
                   target:
