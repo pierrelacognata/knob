@@ -1,0 +1,87 @@
+blueprint:
+  name: Knobby knob knob 3
+  description: Control the volume of the media player and set play/pause on it
+  domain: automation
+  input:
+    remote:
+      name: Remote
+      description: Moes Tuya Smart Knob Device to use
+      selector:
+        device:
+          integration: zha
+          model: TS004F
+    tv:
+      name: Tv(s)
+      description: The tv/mediaplayer(s) to control
+      selector:
+        target:
+          entity:
+            domain: media_player
+    single_press:
+      name: Single press
+      description: Action to run on single press
+      default: []
+      selector:
+        action: {}
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input 'remote'
+
+action:
+  - variables:
+      command: '{{ trigger.event.data.command }}'
+      cluster_id: '{{ trigger.event.data.cluster_id }}'
+      endpoint_id: '{{ trigger.event.data.endpoint_id }}'
+      args: '{{ trigger.event.data.args }}'
+      step_mode: '{{ args[0]|int }}'
+      step_size: '{{ args[1]|int }}'
+  - choose:
+      # Play / Pause
+      - conditions:
+          - '{{ command == "toggle" }}'
+          - '{{ cluster_id == 6 }}'
+          - '{{ endpoint_id == 1 }}'
+        sequence: !input 'single_press'
+
+      # Volume up
+      - conditions:
+          - '{{ command == "step" }}'
+          - '{{ cluster_id == 8 }}'
+          - '{{ endpoint_id == 1 }}'
+          - '{{ step_mode == 0 }}'
+        sequence:
+          - repeat:
+              for_each: '{{ expand(!input "tv").entity_id }}'
+              sequence:
+                - variables:
+                    current: '{{ state_attr(repeat.item, "volume_level") | float(0) }}'
+                    newvol: '{{ [ current + (step_size|int/100), 1 ] | min }}'
+                - service: media_player.volume_set
+                  target:
+                    entity_id: '{{ repeat.item }}'
+                  data:
+                    volume_level: '{{ newvol }}'
+
+      # Volume down
+      - conditions:
+          - '{{ command == "step" }}'
+          - '{{ cluster_id == 8 }}'
+          - '{{ endpoint_id == 1 }}'
+          - '{{ step_mode == 1 }}'
+        sequence:
+          - repeat:
+              for_each: '{{ expand(!input "tv").entity_id }}'
+              sequence:
+                - variables:
+                    current: '{{ state_attr(repeat.item, "volume_level") | float(0) }}'
+                    newvol: '{{ [ current - (step_size|int/100), 0 ] | max }}'
+                - service: media_player.volume_set
+                  target:
+                    entity_id: '{{ repeat.item }}'
+                  data:
+                    volume_level: '{{ newvol }}'
