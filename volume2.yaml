@@ -1,0 +1,87 @@
+blueprint:
+  name: ZHA - Moes Smart Knob for Input Number
+  description: >
+    Use a Moes Smart Knob (ZHA) to control any input_number in Home Assistant.
+    Rotating right increases the value, rotating left decreases it.
+    Step size is configurable. Only moves the slider; existing automations handle what to do with it.
+  domain: automation
+
+  input:
+    remote:
+      name: Moes Knob
+      description: Select the Moes knob device
+      selector:
+        device:
+          integration: zha
+          model: TS004F
+          multiple: false
+
+    volume_slider:
+      name: Volume Slider
+      description: The input_number to control
+      selector:
+        entity:
+          domain: input_number
+
+    step_size:
+      name: Step Size
+      description: How much to increase or decrease the slider per knob step
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 20
+          step: 1
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input remote
+
+action:
+  - variables:
+      command: '{{ trigger.event.data.command }}'
+      cluster_id: '{{ trigger.event.data.cluster_id }}'
+      endpoint_id: '{{ trigger.event.data.endpoint_id }}'
+      mode: '{% if command != "toggle" %}{{ trigger.event.data.args[0] }}{% endif %}'
+      steps: '{% if command != "toggle" %}{{ (trigger.event.data.args[1] / 12.5) | int }}{% endif %}'
+      volume_slider_entity: !input volume_slider
+      current_value: "{{ states(volume_slider_entity) | int }}"
+      step_amount: !input step_size
+
+  # Rotate right → increase
+  - choose:
+      - conditions:
+          - '{{ cluster_id == 8 }}'
+          - '{{ endpoint_id == 1 }}'
+          - '{{ command == "step" }}'
+          - '{{ mode == "StepMode.Up" }}'
+        sequence:
+          - service: input_number.set_value
+            target:
+              entity_id: "{{ volume_slider_entity }}"
+            data:
+              value: >
+                {% set new_value = current_value + (step_amount * steps | int) %}
+                {% set max_val = state_attr(volume_slider_entity, 'max') | int %}
+                {{ new_value if new_value <= max_val else max_val }}
+
+  # Rotate left → decrease
+      - conditions:
+          - '{{ cluster_id == 8 }}'
+          - '{{ endpoint_id == 1 }}'
+          - '{{ command == "step" }}'
+          - '{{ mode == "StepMode.Down" }}'
+        sequence:
+          - service: input_number.set_value
+            target:
+              entity_id: "{{ volume_slider_entity }}"
+            data:
+              value: >
+                {% set new_value = current_value - (step_amount * steps | int) %}
+                {% set min_val = state_attr(volume_slider_entity, 'min') | int %}
+                {{ new_value if new_value >= min_val else min_val }}
